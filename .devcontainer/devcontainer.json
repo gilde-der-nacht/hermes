@@ -1,0 +1,13 @@
+{
+	"name": "Hermes",
+	"build": {
+		"dockerfile": "../Dockerfile",
+	},
+	"settings": {
+		"terminal.integrated.shell.linux": "/bin/ash"
+	},
+	"workspaceFolder": "/workspaces/hermes/src",
+	"extensions": [
+		"ms-python.python"
+	],
+}

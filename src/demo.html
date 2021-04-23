@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Py Discord Chat Bot</title>
+<style>
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: 'Ubuntu', sans-serif;
+	width: 60em;
+	margin: 1em auto;
+}
+
+main {
+	border: 1px dotted #ccc;
+	border-radius: 1em;
+	padding: 1em;
+}
+
+input {
+	width: 100%;
+}
+
+textarea {
+	width: 100%;
+	height: 10em;
+}
+
+</style>
+<script>
+
+function log(...messages) {
+	const nodeTextArea = document.getElementById('log');
+	const datetime = (new Date()).toISOString();
+	nodeTextArea.value += datetime + ' ' + messages.join(' ') + '\n';
+	nodeTextArea.scrollTop = nodeTextArea.scrollHeight;
+}
+
+// randomFromTo(2, 4) -> 2, 3, 4
+function randomFromTo(fromInclusive, toInclusive) {
+	return Math.floor(Math.random() * (toInclusive - fromInclusive + 1)) + fromInclusive;
+}
+
+function onOpen() {
+	log('onopen');
+}
+
+function onClose() {
+	log('onclose');
+}
+
+function onMessage(event) {
+	log('onmessage', event.data);
+	const nodeTextArea = document.getElementById('receive');
+	const message = JSON.parse(event.data)
+	if (message.type === 'text') {
+		nodeTextArea.value += message.channel + '> ' + message.author + ': ' + message.text + '\n';
+		nodeTextArea.scrollTop = nodeTextArea.scrollHeight;
+	}
+}
+
+function onError(event) {
+	log('onerror', JSON.stringify(event));
+}
+
+function wsCreate(url) {
+	const ws = new WebSocket(url);
+	ws.addEventListener('open', onOpen);
+	ws.addEventListener('close', onClose);
+	ws.addEventListener('message', onMessage);
+	ws.addEventListener('error', onError);
+	return ws;
+}
+
+function wsWaitForOpen(ws) {
+	return new Promise(resolve => ws.addEventListener('open', resolve));
+}
+
+async function main() {
+	document.getElementById('clear').addEventListener('click', (event) => {
+		document.getElementById('receive').value = '';
+		document.getElementById('log').value = '';
+	});
+
+	const nodeAuthor = document.getElementById('author');
+	nodeAuthor.value = 'Mercurius' + randomFromTo(1000, 9999);
+
+	// the DEMO_ constants are replaced by their respective environment variable
+	const ws = wsCreate('DEMO_WEBSOCKET_SERVER');
+	const serverid = 'DEMO_DISCORD_SERVERID';
+	const channel = 'DEMO_DISCORD_CHANNEL';
+
+	function sendMessage(message) {
+		const send = JSON.stringify(message);
+		log('send', send);
+		ws.send(send);
+	}
+
+	await wsWaitForOpen(ws);
+	sendMessage({type: 'ping'});
+
+	document.getElementById('send').focus();
+	document.getElementById('send').addEventListener('keypress', (event) => {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			nodeInput = document.getElementById('send');
+			sendMessage({type: 'text', channel: channel, author: nodeAuthor.value, serverid: serverid, text: nodeInput.value});
+			nodeInput.value = '';
+		}
+	});
+}
+
+window.addEventListener('load', main);
+
+</script>
+<body>
+
+<main>
+	<h1>Py Discord Chat Bot</h1>
+	<h2>Author</h2>
+	<input id="author" type="text">
+	<h2>Receive</h2>
+	<textarea id="receive" readonly></textarea>
+	<h2>Send</h2>
+	<input id="send" type="text">
+	<h2>Log</h2>
+	<textarea id="log" readonly></textarea>
+	<h2>Clear</h2>
+	<button id="clear">Clear</button>
+</main>
+
+</body>
+</html>

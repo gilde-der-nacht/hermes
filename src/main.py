@@ -6,6 +6,7 @@ import os
 import starlette
 import starlette.applications
 import starlette.status
+import starlette.config
 import time
 import uvicorn
 import types
@@ -20,16 +21,15 @@ TODO add a register message? instead of sending author, channel, ... everytime?
 TODO Server ID is more unique id than Server name, and also does not change. For a channel the ID may be a better idea, but its somewhat more complicated to get the channel id, and if channels are deleted/recreated the IDs also change. See Your User Settings -> Advanced -> Develop Mode ... New Context Menu appears copy ID
 """
 
+config = starlette.config.Config('../.env')
 
-# TODO use starlette Config class
+DISCORD_TOKEN = config('DISCORD_TOKEN')
+WEB_STATUS_USERNAME = config('WEB_STATUS_USERNAME')
+WEB_STATUS_PASSWORD = config('WEB_STATUS_PASSWORD')
 
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-WEB_STATUS_USERNAME = os.getenv('WEB_STATUS_USERNAME')
-WEB_STATUS_PASSWORD = os.getenv('WEB_STATUS_PASSWORD')
-
-DEMO_WEBSOCKET_SERVER = os.getenv('DEMO_WEBSOCKET_SERVER')
-DEMO_DISCORD_SERVERID = os.getenv('DEMO_DISCORD_SERVERID')
-DEMO_DISCORD_CHANNELID = os.getenv('DEMO_DISCORD_CHANNELID')
+DEMO_WEBSOCKET_SERVER = config('DEMO_WEBSOCKET_SERVER')
+DEMO_DISCORD_SERVERID = config('DEMO_DISCORD_SERVERID')
+DEMO_DISCORD_CHANNELID = config('DEMO_DISCORD_CHANNELID')
 
 def dict2obj(d): return types.SimpleNamespace(**d)
 
@@ -175,7 +175,7 @@ https://discordpy.readthedocs.io/en/latest/api.html
 class MyClient(discord.Client):
 	async def on_ready(self):
 		print('Discord Ready', self.user)
-		await self.user.edit(username='Hermes')
+		# await self.user.edit(username='Hermes')
 
 	async def on_message(self, message):
 		"""

@@ -1,24 +1,28 @@
 
 import asyncio
+import base64
 import collections
 import discord
-import os
 import starlette
 import starlette.applications
-import starlette.status
 import starlette.config
+import starlette.status
+import sys
 import time
-import uvicorn
 import types
-import base64
+import uvicorn
+import websockets
 
 """
+TODO .env is at a different place in the docker image, should be done better
 TODO put routes into namespace/class
 TODO decouple State/Discord/Starlette
 TODO replace starlette with FastAPI?
 TODO do not start the service when the important env variables are not set correctly
 TODO add a register message? instead of sending author, channel, ... everytime?
-TODO Server ID is more unique id than Server name, and also does not change. For a channel the ID may be a better idea, but its somewhat more complicated to get the channel id, and if channels are deleted/recreated the IDs also change. See Your User Settings -> Advanced -> Develop Mode ... New Context Menu appears copy ID
+TODO Bot adds an emoji to every message delivered correctly to all web-users -> await message.add_reaction('✅')
+TODO 1:1 chats?
+TODO Detect spam from web-users
 """
 
 config = starlette.config.Config('../.env')
@@ -113,33 +117,28 @@ def demo(request):
 	return starlette.responses.HTMLResponse(html)
 
 async def handle_message(connection, message):
-	websocket = connection.websocket
 	if message.type == 'ping':
-		await websocket.send_json({'type': 'pong'})
+		await connection.websocket.send_json({'type': 'pong'})
 	elif message.type == 'text':
-		connection.channelid, connection.author = message.channelid, message.author
+		if connection.serverid is None:
+			connection.serverid, connection.channelid, connection.author = message.serverid, message.channelid, message.author
+			text = '**' + connection.author + '**: *Connected*'
+			await state.discord.send_message(connection.serverid, connection.channelid, text)
 		text = '**' + message.author + '**: ' + message.text
-		if state.discord is not None:
-			guild = discord.utils.get(state.discord.guilds, id=int(message.serverid))
-			if guild is None:
-				return
-			channel = discord.utils.get(guild.channels, id=int(message.channelid))
-			if type(channel) != discord.channel.TextChannel:
-				return
-			await channel.send(text)
+		await state.discord.send_message(message.serverid, message.channelid, text)
 
 async def websocket(websocket):
+	if state.discord is None:
+		return
 	await websocket.accept()
 	connection = dict2obj({
 		'websocket': websocket,
 		'author': '',
-		'channel': None,
+		'serverid': None,
+		'channelid': None,
 	})
 	state.connections.append(connection)
 	state.count_connections[websocket.client.host] += 1
-	# TODO notify discord that user entered, use origin header to show from where the connection was opened (maybe use https://docs.python.org/3/library/urllib.parse.html)
-	if state.discord is not None:
-		pass
 	try:
 		while True:
 			message = dict2obj(await websocket.receive_json())
@@ -147,12 +146,16 @@ async def websocket(websocket):
 			await handle_message(connection, message)
 	except starlette.websockets.WebSocketDisconnect:
 		pass
+	except websockets.exceptions.ConnectionClosedOK:
+		pass
 	except Exception as e:
 		print(e)
 		# TODO add to statistics?
 	if state.discord is not None:
 		pass
-	# TODO notify discord that user left
+	if connection.serverid is not None:
+		text = '**' + connection.author + '**: *Disconnected*'
+		await state.discord.send_message(connection.serverid, connection.channelid, text)
 	state.connections.remove(connection)
 
 async def task_web(loop):
@@ -163,7 +166,7 @@ async def task_web(loop):
 		starlette.routing.WebSocketRoute('/ws', websocket),
 	]
 	app = starlette.applications.Starlette(debug=True, routes=routes)
-	config = uvicorn.Config(app=app, loop=loop, port=8000, host='0.0.0.0')
+	config = uvicorn.Config(app=app, loop=loop, port=8000, host='0.0.0.0')  # if executed through Docker, change the port in the Docker configuration
 	server = uvicorn.Server(config)
 	await server.serve()
 
@@ -179,7 +182,6 @@ class MyClient(discord.Client):
 
 	async def on_message(self, message):
 		"""
-		await message.add_reaction('✅')
 		TODO only send for registered channel, before "registration" do not send anything
 		TODO is the sent name the current set discord name? or is it the account name?
 		"""
@@ -191,6 +193,15 @@ class MyClient(discord.Client):
 				'channel': channel,
 				'text': text,
 			})
+
+	async def send_message(self, serverid, channelid, text):
+		guild = discord.utils.get(state.discord.guilds, id=int(serverid))
+		if guild is None:
+			return
+		channel = discord.utils.get(guild.channels, id=int(channelid))
+		if type(channel) != discord.channel.TextChannel:
+			return
+		await channel.send(text)
 
 async def task_discord(loop):
 	"""

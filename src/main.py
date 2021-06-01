@@ -186,9 +186,8 @@ class MyClient(discord.Client):
 	async def on_message(self, message):
 		"""
 		TODO only send for registered channel, before "registration" do not send anything
-		TODO is the sent name the current set discord name? or is it the account name?
 		"""
-		author, channel, text = message.author.name, message.channel.name, message.content
+		author, channel, text = message.author.display_name, message.channel.name, message.content  # author.display_name != author.name
 		for connection in state.connections:
 			await connection.websocket.send_json({
 				'type': 'text',

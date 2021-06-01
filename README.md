@@ -29,7 +29,7 @@ The following variables are only used for the `/demo` example. If the demo is no
 
 - `DEMO_WEBSOCKET_SERVER`: The URL where the WebSocket has to connect to. Normally something like wss://domainname.tld/ws, for development just ws://127.0.0.1/ws
 - `DEMO_DISCORD_SERVERID`: Every Discord server has a unique id. See inside Discord: Server Settings -> Widgets -> Server ID.
-- `DEMO_DISCORD_CHANNELID`: Unique ID of the Discord channel the message from the web-user has to be sent to. Enable the Devloper Mode in the Discord Settings allows to copy the ID of every channel within Discord itself.
+- `DEMO_DISCORD_CHANNELID`: Unique ID of the Discord channel the message from the web-user has to be sent to. Enable the Devloper Mode in the Discord Settings allows to copy the ID of every channel within Discord itself. See User Settings -> Advanced -> Develop Mode.
 
 ## Create Bot (Developer)
 
@@ -67,10 +67,3 @@ Hermes ID = 814141033234300969
 ## Docker
 
 `python:3.9-alpine3.13` probably would be a better fit, but `pip` wants to build a package which needs gcc (available via package `build-base`) which leads to a quite large image (> 200 MByte). Needs further investigations.
-
-## Ideas
-
-- Message within discord for every connected/disconnected user
-- Bot adds an emoji to every message delivered correctly to all web-users
-- 1:1 chats?
-- Detect spam from web-users

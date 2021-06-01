@@ -15,6 +15,7 @@ import websockets
 
 """
 
+- TODO change serverid to guildid
 - TODO .env is at a different place in the docker image, should be done better
 - TODO put functions for routes into namespace or class
 - TODO decouple State/Discord/Starlette
@@ -124,7 +125,7 @@ async def handle_message(connection, message):
 		await connection.websocket.send_json({'type': 'pong'})
 	elif message.type == 'text':
 		if connection.serverid is None:
-			connection.serverid, connection.channelid, connection.author = message.serverid, message.channelid, message.author
+			connection.serverid, connection.channelid, connection.author = int(message.serverid), int(message.channelid), message.author
 			text = '**' + connection.author + '**: *Connected*'
 			await state.discord.send_message(connection.serverid, connection.channelid, text)
 		text = '**' + message.author + '**: ' + message.text
@@ -134,6 +135,7 @@ async def websocket(websocket):
 	if state.discord is None:
 		return
 	await websocket.accept()
+	# TODO maybe create a class?
 	connection = dict2obj({
 		'websocket': websocket,
 		'author': '',
@@ -181,26 +183,24 @@ https://discordpy.readthedocs.io/en/latest/api.html
 class MyClient(discord.Client):
 	async def on_ready(self):
 		print('Discord Ready', self.user)
-		# await self.user.edit(username='Hermes')
+		# await self.user.edit(username='Hermes')  # change username
 
 	async def on_message(self, message):
-		"""
-		TODO only send for registered channel, before "registration" do not send anything
-		"""
-		author, channel, text = message.author.display_name, message.channel.name, message.content  # author.display_name != author.name
 		for connection in state.connections:
-			await connection.websocket.send_json({
-				'type': 'text',
-				'author': author,
-				'channel': channel,
-				'text': text,
-			})
+			if (message.guild.id == connection.serverid) and (message.channel.id == connection.channelid):
+				# only send message from discord-user to a web-user, if the web-user has registered itself to a channel
+				await connection.websocket.send_json({
+					'type': 'text',
+					'author': message.author.display_name,  # author.display_name != author.name
+					'channel': message.channel.name,
+					'text': message.content,
+				})
 
 	async def send_message(self, serverid, channelid, text):
-		guild = discord.utils.get(state.discord.guilds, id=int(serverid))
+		guild = discord.utils.get(state.discord.guilds, id=serverid)
 		if guild is None:
 			return
-		channel = discord.utils.get(guild.channels, id=int(channelid))
+		channel = discord.utils.get(guild.channels, id=channelid)
 		if type(channel) != discord.channel.TextChannel:
 			return
 		await channel.send(text)

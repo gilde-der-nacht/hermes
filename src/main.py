@@ -7,7 +7,6 @@ import starlette
 import starlette.applications
 import starlette.config
 import starlette.status
-import sys
 import time
 import types
 import uvicorn
@@ -15,7 +14,6 @@ import websockets
 
 """
 
-- TODO change serverid to guildid
 - TODO .env is at a different place in the docker image, should be done better
 - TODO put functions for routes into namespace or class
 - TODO decouple State/Discord/Starlette
@@ -37,7 +35,7 @@ WEB_STATUS_USERNAME = config('WEB_STATUS_USERNAME')
 WEB_STATUS_PASSWORD = config('WEB_STATUS_PASSWORD')
 
 DEMO_WEBSOCKET_SERVER = config('DEMO_WEBSOCKET_SERVER')
-DEMO_DISCORD_SERVERID = config('DEMO_DISCORD_SERVERID')
+DEMO_DISCORD_GUILDID = config('DEMO_DISCORD_GUILDID')
 DEMO_DISCORD_CHANNELID = config('DEMO_DISCORD_CHANNELID')
 
 def dict2obj(d): return types.SimpleNamespace(**d)
@@ -116,7 +114,7 @@ def status(request):
 def demo(request):
 	html = open('demo.html', 'r').read()
 	html = html.replace('DEMO_WEBSOCKET_SERVER', DEMO_WEBSOCKET_SERVER)
-	html = html.replace('DEMO_DISCORD_SERVERID', DEMO_DISCORD_SERVERID)
+	html = html.replace('DEMO_DISCORD_GUILDID', DEMO_DISCORD_GUILDID)
 	html = html.replace('DEMO_DISCORD_CHANNELID', DEMO_DISCORD_CHANNELID)
 	return starlette.responses.HTMLResponse(html)
 
@@ -124,12 +122,12 @@ async def handle_message(connection, message):
 	if message.type == 'ping':
 		await connection.websocket.send_json({'type': 'pong'})
 	elif message.type == 'text':
-		if connection.serverid is None:
-			connection.serverid, connection.channelid, connection.author = int(message.serverid), int(message.channelid), message.author
+		if connection.guildid is None:
+			connection.guildid, connection.channelid, connection.author = int(message.guildid), int(message.channelid), message.author
 			text = '**' + connection.author + '**: *Connected*'
-			await state.discord.send_message(connection.serverid, connection.channelid, text)
+			await state.discord.send_message(connection.guildid, connection.channelid, text)
 		text = '**' + message.author + '**: ' + message.text
-		await state.discord.send_message(message.serverid, message.channelid, text)
+		await state.discord.send_message(connection.guildid, connection.channelid, text)
 
 async def websocket(websocket):
 	if state.discord is None:
@@ -139,7 +137,7 @@ async def websocket(websocket):
 	connection = dict2obj({
 		'websocket': websocket,
 		'author': '',
-		'serverid': None,
+		'guildid': None,
 		'channelid': None,
 	})
 	state.connections.append(connection)
@@ -147,7 +145,6 @@ async def websocket(websocket):
 	try:
 		while True:
 			message = dict2obj(await websocket.receive_json())
-			#print('message', message)
 			await handle_message(connection, message)
 	except starlette.websockets.WebSocketDisconnect:
 		pass
@@ -158,9 +155,9 @@ async def websocket(websocket):
 		# TODO add to statistics?
 	if state.discord is not None:
 		pass
-	if connection.serverid is not None:
+	if connection.guildid is not None:
 		text = '**' + connection.author + '**: *Disconnected*'
-		await state.discord.send_message(connection.serverid, connection.channelid, text)
+		await state.discord.send_message(connection.guildid, connection.channelid, text)
 	state.connections.remove(connection)
 
 async def task_web(loop):
@@ -187,7 +184,7 @@ class MyClient(discord.Client):
 
 	async def on_message(self, message):
 		for connection in state.connections:
-			if (message.guild.id == connection.serverid) and (message.channel.id == connection.channelid):
+			if (message.guild.id == connection.guildid) and (message.channel.id == connection.channelid):
 				# only send message from discord-user to a web-user, if the web-user has registered itself to a channel
 				await connection.websocket.send_json({
 					'type': 'text',
@@ -196,8 +193,8 @@ class MyClient(discord.Client):
 					'text': message.content,
 				})
 
-	async def send_message(self, serverid, channelid, text):
-		guild = discord.utils.get(state.discord.guilds, id=serverid)
+	async def send_message(self, guildid, channelid, text):
+		guild = discord.utils.get(state.discord.guilds, id=guildid)
 		if guild is None:
 			return
 		channel = discord.utils.get(guild.channels, id=channelid)

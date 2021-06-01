@@ -92,7 +92,7 @@ async function main() {
 
 	// the DEMO_ constants are replaced by their respective environment variable
 	const ws = wsCreate('DEMO_WEBSOCKET_SERVER');
-	const serverid = 'DEMO_DISCORD_SERVERID';
+	const guildid = 'DEMO_DISCORD_GUILDID';
 	const channelid = 'DEMO_DISCORD_CHANNELID';
 
 	function sendMessage(message) {
@@ -109,7 +109,7 @@ async function main() {
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			nodeInput = document.getElementById('send');
-			sendMessage({type: 'text', channelid: channelid, author: nodeAuthor.value, serverid: serverid, text: nodeInput.value});
+			sendMessage({type: 'text', channelid: channelid, author: nodeAuthor.value, guildid: guildid, text: nodeInput.value});
 			nodeInput.value = '';
 		}
 	});

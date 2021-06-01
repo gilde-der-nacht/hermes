@@ -14,15 +14,19 @@ import uvicorn
 import websockets
 
 """
-TODO .env is at a different place in the docker image, should be done better
-TODO put routes into namespace/class
-TODO decouple State/Discord/Starlette
-TODO replace starlette with FastAPI?
-TODO do not start the service when the important env variables are not set correctly
-TODO add a register message? instead of sending author, channel, ... everytime?
-TODO Bot adds an emoji to every message delivered correctly to all web-users -> await message.add_reaction('✅')
-TODO 1:1 chats?
-TODO Detect spam from web-users
+
+- TODO .env is at a different place in the docker image, should be done better
+- TODO put functions for routes into namespace or class
+- TODO decouple State/Discord/Starlette
+- TODO replace starlette with FastAPI?
+- TODO add a register message? instead of sending author, channel, ... everytime?
+
+Ideas:
+
+- Bot adds an emoji to every message delivered correctly to all web-users -> await message.add_reaction('✅')
+- 1:1 chats?
+- Detect spam from web-users
+
 """
 
 config = starlette.config.Config('../.env')
@@ -48,7 +52,6 @@ state = State()
 
 async def task_timer(loop):
 	"""
-	TODO use aio loop
 	TODO change this into a Discord fake emulation to test the service without Discord
 	"""
 	while True:
@@ -56,7 +59,7 @@ async def task_timer(loop):
 		for (i, connection) in enumerate(state.connections):
 			text = 'Hello From Server. You ID Is ' + str(i) + '. Time Is ' + str(time.time())
 			await connection.websocket.send_json({'type': 'text', 'text': text})
-		await asyncio.sleep(5.0)
+		await asyncio.sleep(5.0, loop=loop)
 
 """
 https://www.starlette.io/
@@ -204,11 +207,7 @@ class MyClient(discord.Client):
 		await channel.send(text)
 
 async def task_discord(loop):
-	"""
-	TODO use aio loop
-	"""
-	assert len(DISCORD_TOKEN) > 0
-	client = MyClient()
+	client = MyClient(loop=loop)
 	state.discord = client
 	await client.login(DISCORD_TOKEN)
 	await client.connect()
@@ -218,6 +217,6 @@ async def task_discord(loop):
 loop = asyncio.get_event_loop()
 #loop.create_task(task_timer(loop))
 loop.create_task(task_discord(loop))
-# loop.create_task(task_web())
+# loop.create_task(task_web(loop))
 loop.run_until_complete(task_web(loop))
 # loop.run_forever()

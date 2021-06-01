@@ -17,6 +17,7 @@ TODO decouple State/Discord/Starlette
 TODO replace starlette with FastAPI?
 TODO do not start the service when the important env variables are not set correctly
 TODO add a register message? instead of sending author, channel, ... everytime?
+TODO Server ID is more unique id than Server name, and also does not change. For a channel the ID may be a better idea, but its somewhat more complicated to get the channel id, and if channels are deleted/recreated the IDs also change. See Your User Settings -> Advanced -> Develop Mode ... New Context Menu appears copy ID
 """
 
 
@@ -28,7 +29,7 @@ WEB_STATUS_PASSWORD = os.getenv('WEB_STATUS_PASSWORD')
 
 DEMO_WEBSOCKET_SERVER = os.getenv('DEMO_WEBSOCKET_SERVER')
 DEMO_DISCORD_SERVERID = os.getenv('DEMO_DISCORD_SERVERID')
-DEMO_DISCORD_CHANNEL = os.getenv('DEMO_DISCORD_CHANNEL')
+DEMO_DISCORD_CHANNELID = os.getenv('DEMO_DISCORD_CHANNELID')
 
 def dict2obj(d): return types.SimpleNamespace(**d)
 
@@ -108,7 +109,7 @@ def demo(request):
 	html = open('demo.html', 'r').read()
 	html = html.replace('DEMO_WEBSOCKET_SERVER', DEMO_WEBSOCKET_SERVER)
 	html = html.replace('DEMO_DISCORD_SERVERID', DEMO_DISCORD_SERVERID)
-	html = html.replace('DEMO_DISCORD_CHANNEL', DEMO_DISCORD_CHANNEL)
+	html = html.replace('DEMO_DISCORD_CHANNELID', DEMO_DISCORD_CHANNELID)
 	return starlette.responses.HTMLResponse(html)
 
 async def handle_message(connection, message):
@@ -116,13 +117,13 @@ async def handle_message(connection, message):
 	if message.type == 'ping':
 		await websocket.send_json({'type': 'pong'})
 	elif message.type == 'text':
-		connection.channel, connection.author = message.channel, message.author
+		connection.channelid, connection.author = message.channelid, message.author
 		text = '**' + message.author + '**: ' + message.text
 		if state.discord is not None:
 			guild = discord.utils.get(state.discord.guilds, id=int(message.serverid))
 			if guild is None:
 				return
-			channel = discord.utils.get(guild.channels, name=message.channel)
+			channel = discord.utils.get(guild.channels, id=int(message.channelid))
 			if type(channel) != discord.channel.TextChannel:
 				return
 			await channel.send(text)
@@ -180,6 +181,7 @@ class MyClient(discord.Client):
 		"""
 		await message.add_reaction('✅')
 		TODO only send for registered channel, before "registration" do not send anything
+		TODO is the sent name the current set discord name? or is it the account name?
 		"""
 		author, channel, text = message.author.name, message.channel.name, message.content
 		for connection in state.connections:

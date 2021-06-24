@@ -16,7 +16,6 @@ import websockets
 
 - TODO put functions for routes into namespace or class
 - TODO decouple State/Discord/Starlette
-- TODO replace starlette with FastAPI?
 - TODO add a register message? instead of sending author, channel, ... everytime?
 
 Ideas:
@@ -156,7 +155,7 @@ async def websocket(websocket):
 		pass
 	except Exception as e:
 		print(e)
-		# TODO add to statistics?
+		# TODO add to statistics? remove print, nobody is gonna see this
 	if state.discord is not None:
 		pass
 	if connection.guildid is not None:

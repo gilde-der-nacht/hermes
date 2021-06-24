@@ -25,11 +25,11 @@ The environment variables for the service are stored in the `.env` file. This fi
 - `DISCORD_TOKEN`: Every Discord bot has a unique, secret token which is normally generated once, when a new bot is created. See below in section *Create Bot*.
 - `PORT`: The port the web-service listens to. The web-service supports only HTTP, no HTTPS. Therefore it is advised to e.g. use a reverse proxy to offer HTTPS. The reverse proxy must be configured to allow WebSocket connections.
 
-The following variables are only used for the `/demo` example. If the demo is not used, they may be empty.
+The following variables are only used for the `/demo` example. If the demo is not used, they may be left empty.
 
 - `DEMO_WEBSOCKET_SERVER`: The URL where the WebSocket has to connect to. Normally something like wss://domainname.tld/ws, for development just ws://127.0.0.1/ws
 - `DEMO_DISCORD_SERVERID`: Every Discord server has a unique id. See inside Discord: Server Settings -> Widgets -> Server ID.
-- `DEMO_DISCORD_CHANNELID`: Unique ID of the Discord channel the message from the web-user has to be sent to. Enable the Devloper Mode in the Discord Settings allows to copy the ID of every channel within Discord itself. See User Settings -> Advanced -> Develop Mode.
+- `DEMO_DISCORD_CHANNELID`: Unique ID of the Discord channel the message from the web-user has to be sent to. The Devloper Mode in the Discord Settings allows to copy the ID of every channel within Discord itself. See User Settings -> Advanced -> Develop Mode.
 
 ## Create Bot (Developer)
 
@@ -44,7 +44,7 @@ https://discord.com/developers/applications/
 
 ## Add Bot (Server Administrator)
 
-To add the Discord bot to a Discord Server, the administrator of the Discord server has to add the bot manually and give it appropriate permissions. The default permission can be created with combination of numeric values:
+To add the Discord bot to a Discord Server, the administrator of the Discord server has to add the bot manually and give the bot appropriate permissions. The default permission can be created with combination of numeric values:
 
 Permission Flag Examples
 
@@ -55,15 +55,17 @@ Permission Flag Examples
 
 https://discordapp.com/oauth2/authorize?&client_id=APPLICATION_ID&scope=bot&permissions=PERMISSION
 
-Hermes ID = 814141033234300969
+Hermes Application ID = 814141033234300969
+
+https://discordapp.com/oauth2/authorize?&client_id=814141033234300969&scope=bot&permissions=2048
 
 ## URLs Web Service
 
-- `/`: Short textmessage to check if the server is running.
+- `/`: Short text message to check if the server is running.
 - `/ws`: URL the WebSocket has to connect to.
-- `/status`: Password protected, gives information about web-users and Discord state.
+- `/status`: Gives information about web-users and Discord state. Password protected.
 - `/demo`: A bare minimum demonstration for a web-user.
 
 ## Docker
 
-`python:3.9-alpine3.13` probably would be a better fit, but `pip` wants to build a package which needs gcc (available via package `build-base`) which leads to a quite large image (> 200 MByte). Needs further investigations.
+`python:3.9-alpine3.13` probably would be a better fit as base image, but `pip` wants to build a package which needs gcc (available via package `build-base`) which leads to a quite large image (> 200 MByte). Needs further investigations.

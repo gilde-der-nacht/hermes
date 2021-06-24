@@ -90,7 +90,7 @@ async function main() {
 	const nodeAuthor = document.getElementById('author');
 	nodeAuthor.value = 'Mercurius' + randomFromTo(1000, 9999);
 
-	// the DEMO_ constants are replaced by their respective environment variable
+	// the DEMO_ constants are replaced by their respective environment variable on the server
 	const ws = wsCreate('DEMO_WEBSOCKET_SERVER');
 	const guildid = 'DEMO_DISCORD_GUILDID';
 	const channelid = 'DEMO_DISCORD_CHANNELID';

@@ -2,7 +2,5 @@ version: "3.8"
 services:
   tartaros:
     build: .
-    env_file:
-      - .env
     ports:
-      - "${PORT}:8000"
+      - "8004:8000"

@@ -14,7 +14,6 @@ import websockets
 
 """
 
-- TODO .env is at a different place in the docker image, should be done better
 - TODO put functions for routes into namespace or class
 - TODO decouple State/Discord/Starlette
 - TODO replace starlette with FastAPI?
@@ -28,7 +27,7 @@ Ideas:
 
 """
 
-config = starlette.config.Config('../.env')
+config = starlette.config.Config('.env')
 
 DISCORD_TOKEN = config('DISCORD_TOKEN')
 WEB_STATUS_USERNAME = config('WEB_STATUS_USERNAME')
@@ -101,7 +100,7 @@ def status(request):
 			'port': port,
 			'headers': { name:headers[name] for name in headers },
 			'author': connection.author,
-			'channel': connection.channel,
+			'channelid': connection.channelid,
 		})
 	discord_user = state.discord.user.name if state.discord is not None else ''
 	return starlette.responses.JSONResponse({

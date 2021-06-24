@@ -8,7 +8,7 @@ Service which allows several web clients to read and write message to a channel 
 ## Try It First
 
 - `docker-compose up`
-- `firefox http://127.0.0.1:8000/demo`
+- `firefox http://127.0.0.1:8004/demo`
 
 ## Terms
 

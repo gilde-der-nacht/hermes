@@ -65,13 +65,13 @@ https://www.starlette.io/
 
 def root(request):
 	"""
-	$ curl http://127.0.0.1:8000
+	$ curl http://127.0.0.1:8004
 	"""
 	return starlette.responses.PlainTextResponse('Up and Alive\n')
 
 def status(request):
 	"""
-	$ curl --silent --user admin:pw http://127.0.0.1:8000/status | jq
+	$ curl --silent --user admin:pw http://127.0.0.1:8004/status | jq
 
 	TODO add discord information, connected server, ...
 	TODO is there a simpler middleware available? not just the example on starlette?
@@ -118,6 +118,11 @@ def demo(request):
 	return starlette.responses.HTMLResponse(html)
 
 async def handle_message(connection, message):
+	"""
+	$ wget https://github.com/vi/websocat/releases/download/v1.8.0/websocat_amd64-linux
+	$ echo '{"type":"ping"}' | ./websocat_amd64-linux --one-message --no-close ws://127.0.0.1:8004/ws
+	"""
+
 	if message.type == 'ping':
 		await connection.websocket.send_json({'type': 'pong'})
 	elif message.type == 'text':
@@ -167,7 +172,7 @@ async def task_web(loop):
 		starlette.routing.WebSocketRoute('/ws', websocket),
 	]
 	app = starlette.applications.Starlette(debug=True, routes=routes)
-	config = uvicorn.Config(app=app, loop=loop, port=8000, host='0.0.0.0')  # if executed through Docker, change the port in the Docker configuration
+	config = uvicorn.Config(app=app, loop=loop, port=8004, host='0.0.0.0')  # if executed through Docker, change the port in the Docker configuration
 	server = uvicorn.Server(config)
 	await server.serve()
 

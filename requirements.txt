@@ -1,4 +1,4 @@
-discord>=1.0
-starlette>=0.13
-websockets>=8.1
-uvicorn>=0.13
+discord~=1.7
+starlette~=0.15.0
+websockets~=8.1
+uvicorn~=0.13.0

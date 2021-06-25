@@ -10,6 +10,10 @@ Service which allows several web clients to read and write message to a channel 
 - `docker-compose up`
 - `firefox http://127.0.0.1:8004/demo`
 
+## Remote Docker
+
+`DOCKER_HOST="ssh://user@domain:port" docker-compose up`
+
 ## Terms
 
 Throughout the rest of this documents the two following terms are used:

@@ -46,7 +46,7 @@ DEMO_WEBSOCKET_SERVER = config('DEMO_WEBSOCKET_SERVER')
 DEMO_DISCORD_GUILDID = config('DEMO_DISCORD_GUILDID')
 DEMO_DISCORD_CHANNELID = config('DEMO_DISCORD_CHANNELID')
 
-ENABLE_FAKE_DISCORD = False
+ENABLE_FAKE_DISCORD = config('ENABLE_FAKE_DISCORD', cast=bool, default=False)
 
 def dict2obj(d): return types.SimpleNamespace(**d)
 
@@ -145,10 +145,9 @@ class Web:
 			pass
 		except websockets.exceptions.ConnectionClosedOK:
 			pass
-		if connection.guildid is not None:
-			text = '**' + connection.author + '**: *Disconnected*'
-			await gateway.discord.send_message(connection.guildid, connection.channelid, text)
 		self.connections.remove(connection)
+		text = '**' + connection.author + '**: *Disconnected*'
+		await gateway.discord.send_message(connection.guildid, connection.channelid, text)
 
 	async def start(self):
 		self.count_connections = collections.defaultdict(lambda: 0)

@@ -49,7 +49,17 @@ ENABLE_FAKE_DISCORD = config('ENABLE_FAKE_DISCORD', cast=bool, default=False)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('hermes')
 
-def dict2obj(d): return types.SimpleNamespace(**d)
+def dict2obj(d):
+	"""
+	d = {'a': 2}
+	d['a']  # -> 2
+	d.a  # AttributeError: 'dict' object has no attribute 'a'
+	o = dict2obj(d)
+	o.a  # -> 2
+	"""
+	return types.SimpleNamespace(**d)
+
+# Web
 
 """
 https://www.starlette.io/
@@ -167,6 +177,8 @@ class Web:
 		server = uvicorn.Server(config)
 		await server.serve()
 
+# Discord
+
 """
 https://discordpy.readthedocs.io/en/stable/#manuals
 https://discordpy.readthedocs.io/en/latest/api.html
@@ -246,7 +258,7 @@ class FakeDiscord():
 	def info(self):
 		return {'user': 'FakeUser'}
 
-# Main
+# Gateway
 
 class Gateway:
 	def __init__(self):

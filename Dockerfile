@@ -1,6 +1,6 @@
-FROM alpine:3.13
+FROM alpine:3.14
 RUN apk update
-RUN apk add --no-cache python3 py3-pip py3-wheel py3-yarl py3-aiohttp py3-multidict py3-websockets
+RUN apk add --no-cache python3 py3-pip py3-wheel py3-yarl py3-multidict
 WORKDIR /src
 COPY requirements.txt .
 RUN pip3 install --requirement requirements.txt

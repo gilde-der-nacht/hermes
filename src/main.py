@@ -3,6 +3,7 @@ import asyncio
 import base64
 import collections
 import discord
+import logging
 import starlette
 import starlette.applications
 import starlette.config
@@ -14,16 +15,25 @@ import websockets
 
 """
 
-- TODO put functions for routes into namespace or class
-- TODO decouple State/Discord/Starlette
-- TODO add a register message? instead of sending author, channel, ... everytime?
+- TODO get rid of global gateway
+- TODO decouple Web/Discord/Gateway
 
 Ideas:
 
-- Bot adds an emoji to every message delivered correctly to all web-users -> await message.add_reaction('✅')
-- 1:1 chats?
-- Detect spam from web-users
-
+- Register: Currently author and guildid and channelid, are sent with every
+  message. A web-user see Discord message only after it send its own message
+  first. Is it better idea to add a "register" message and register the user
+  when he opens the web page?
+- Delivered: Bot may add an emoji to every message in Discord, if a message is
+  delivered to all web-users (await message.add_reaction('✅'))
+- 1:1 Chats: For every web-user, there is a "room" within Discord, just for this
+  web-user.
+- Spam: Detect spam from web-users
+- Starlette Basic Authetication: Is there a middleware available? Not just the
+  example on starlette?
+- Proper Discord Shutdown: Currently starlette reacts to Ctrl+C and as
+  consequence this application is shut down, without properly shutting down
+  discord
 """
 
 config = starlette.config.Config('.env')
@@ -36,157 +46,139 @@ DEMO_WEBSOCKET_SERVER = config('DEMO_WEBSOCKET_SERVER')
 DEMO_DISCORD_GUILDID = config('DEMO_DISCORD_GUILDID')
 DEMO_DISCORD_CHANNELID = config('DEMO_DISCORD_CHANNELID')
 
+ENABLE_FAKE_DISCORD = True
+
 def dict2obj(d): return types.SimpleNamespace(**d)
-
-class State:
-	def __init__(self):
-		self.connections = []
-		self.time_started = time.time()
-		self.count_connections = collections.defaultdict(lambda: 0)
-		self.discord = None
-
-state = State()
-
-async def task_timer(loop):
-	"""
-	TODO change this into a Discord fake emulation to test the service without Discord
-	"""
-	while True:
-		print('Timer', 'connected#', len(state.connections))
-		for (i, connection) in enumerate(state.connections):
-			text = 'Hello From Server. You ID Is ' + str(i) + '. Time Is ' + str(time.time())
-			await connection.websocket.send_json({'type': 'text', 'text': text})
-		await asyncio.sleep(5.0, loop=loop)
 
 """
 https://www.starlette.io/
 """
 
-def root(request):
-	"""
-	$ curl http://127.0.0.1:8004
-	"""
-	return starlette.responses.PlainTextResponse('Up and Alive\n')
+class Web:
+	def root(self, request):
+		"""
+		$ curl http://127.0.0.1:8004
+		"""
+		return starlette.responses.PlainTextResponse('Up and Alive\n')
 
-def status(request):
-	"""
-	$ curl --silent --user admin:pw http://127.0.0.1:8004/status | jq
+	def status(self, request):
+		"""
+		$ curl --silent --user admin:pw http://127.0.0.1:8004/status | jq
+		"""
+		RESPONSE_UNAUTHORIZED = starlette.responses.Response('', status_code=starlette.status.HTTP_401_UNAUTHORIZED, headers={'WWW-Authenticate': 'Basic realm=Status'})
+		if 'Authorization' not in request.headers:
+			return RESPONSE_UNAUTHORIZED
+		try:
+			authorization = request.headers['Authorization']
+			scheme, credentials_encoded = authorization.split(' ', 2)
+			assert scheme == 'Basic'
+			credentials = base64.b64decode(credentials_encoded).decode('ascii')
+			username, password = credentials.split(':', 2)
+		except:
+			return starlette.responses.Response('', status_code=starlette.status.HTTP_400_BAD_REQUEST)
+		if (username != WEB_STATUS_USERNAME) or (password != WEB_STATUS_PASSWORD):
+			return RESPONSE_UNAUTHORIZED
 
-	TODO add discord information, connected server, ...
-	TODO is there a simpler middleware available? not just the example on starlette?
-	"""
-	RESPONSE_UNAUTHORIZED = starlette.responses.Response('', status_code=starlette.status.HTTP_401_UNAUTHORIZED, headers={'WWW-Authenticate': 'Basic realm=Status'})
-	if 'Authorization' not in request.headers:
-		return RESPONSE_UNAUTHORIZED
-	try:
-		authorization = request.headers['Authorization']
-		scheme, credentials_encoded = authorization.split(' ', 2)
-		assert scheme == 'Basic'
-		credentials = base64.b64decode(credentials_encoded).decode('ascii')
-		username, password = credentials.split(':', 2)
-	except:
-		return starlette.responses.Response('', status_code=starlette.status.HTTP_400_BAD_REQUEST)
-	if (username != WEB_STATUS_USERNAME) or (password != WEB_STATUS_PASSWORD):
-		return RESPONSE_UNAUTHORIZED
-
-	runtime_seconds = int(time.time() - state.time_started)
-	connected = []
-	for connection in state.connections:
-		host, port = connection.websocket.client.host, connection.websocket.client.port
-		headers = connection.websocket.headers
-		connected.append({
-			'host': host,
-			'port': port,
-			'headers': { name:headers[name] for name in headers },
-			'author': connection.author,
-			'channelid': connection.channelid,
+		runtime_seconds = int(time.time() - gateway.time_started)
+		return starlette.responses.JSONResponse({
+			'runtime_seconds': runtime_seconds,
+			'web': self.info(),
+			'discord': gateway.discord.info(),
 		})
-	discord_user = state.discord.user.name if state.discord is not None else ''
-	return starlette.responses.JSONResponse({
-		'runtime': runtime_seconds,
-		'connected': connected,
-		'count_connections': state.count_connections,
-		'discord_user': discord_user,
-	})
 
-def demo(request):
-	html = open('demo.html', 'r').read()
-	html = html.replace('DEMO_WEBSOCKET_SERVER', DEMO_WEBSOCKET_SERVER)
-	html = html.replace('DEMO_DISCORD_GUILDID', DEMO_DISCORD_GUILDID)
-	html = html.replace('DEMO_DISCORD_CHANNELID', DEMO_DISCORD_CHANNELID)
-	return starlette.responses.HTMLResponse(html)
+	def info(self):
+		connected = []
+		for connection in self.connections:
+			host, port = connection.websocket.client.host, connection.websocket.client.port
+			headers = connection.websocket.headers
+			connected.append({
+				'host': host,
+				'port': port,
+				'headers': { name:headers[name] for name in headers },
+				'author': connection.author,
+				'channelid': connection.channelid,
+			})
+		return {
+			'connected': connected,
+			'count_connections': self.count_connections,
+		}
 
-async def handle_message(connection, message):
-	"""
-	$ wget https://github.com/vi/websocat/releases/download/v1.8.0/websocat_amd64-linux
-	$ echo '{"type":"ping"}' | ./websocat_amd64-linux --one-message --no-close ws://127.0.0.1:8004/ws
-	"""
 
-	if message.type == 'ping':
-		await connection.websocket.send_json({'type': 'pong'})
-	elif message.type == 'text':
-		if connection.guildid is None:
-			connection.guildid, connection.channelid, connection.author = int(message.guildid), int(message.channelid), message.author
-			text = '**' + connection.author + '**: *Connected*'
-			await state.discord.send_message(connection.guildid, connection.channelid, text)
-		text = '**' + message.author + '**: ' + message.text
-		await state.discord.send_message(connection.guildid, connection.channelid, text)
+	def demo(self, request):
+		html = open('demo.html', 'r').read()
+		html = html.replace('DEMO_WEBSOCKET_SERVER', DEMO_WEBSOCKET_SERVER)
+		html = html.replace('DEMO_DISCORD_GUILDID', DEMO_DISCORD_GUILDID)
+		html = html.replace('DEMO_DISCORD_CHANNELID', DEMO_DISCORD_CHANNELID)
+		return starlette.responses.HTMLResponse(html)
 
-async def websocket(websocket):
-	if state.discord is None:
-		return
-	await websocket.accept()
-	# TODO maybe create a class?
-	connection = dict2obj({
-		'websocket': websocket,
-		'author': '',
-		'guildid': None,
-		'channelid': None,
-	})
-	state.connections.append(connection)
-	state.count_connections[websocket.client.host] += 1
-	try:
-		while True:
-			message = dict2obj(await websocket.receive_json())
-			await handle_message(connection, message)
-	except starlette.websockets.WebSocketDisconnect:
-		pass
-	except websockets.exceptions.ConnectionClosedOK:
-		pass
-	except Exception as e:
-		print(e)
-		# TODO add to statistics? remove print, nobody is gonna see this
-	if state.discord is not None:
-		pass
-	if connection.guildid is not None:
-		text = '**' + connection.author + '**: *Disconnected*'
-		await state.discord.send_message(connection.guildid, connection.channelid, text)
-	state.connections.remove(connection)
+	async def handle_message(self, connection, message):
+		"""
+		$ wget https://github.com/vi/websocat/releases/download/v1.8.0/websocat_amd64-linux
+		$ echo '{"type":"ping"}' | ./websocat_amd64-linux --one-message --no-close ws://127.0.0.1:8004/ws
+		"""
 
-async def task_web(loop):
-	routes = [
-		starlette.routing.Route('/', root),
-		starlette.routing.Route('/demo', demo),
-		starlette.routing.Route('/status', status),
-		starlette.routing.WebSocketRoute('/ws', websocket),
-	]
-	app = starlette.applications.Starlette(debug=True, routes=routes)
-	config = uvicorn.Config(app=app, loop=loop, port=8004, host='0.0.0.0')  # if executed through Docker, change the port in the Docker configuration
-	server = uvicorn.Server(config)
-	await server.serve()
+		if message.type == 'ping':
+			await connection.websocket.send_json({'type': 'pong'})
+		elif message.type == 'text':
+			if connection.guildid is None:
+				connection.guildid, connection.channelid, connection.author = int(message.guildid), int(message.channelid), message.author
+				text = '**' + connection.author + '**: *Connected*'
+				await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+			text = '**' + message.author + '**: ' + message.text
+			await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+
+	async def websocket(self, websocket):
+		await websocket.accept()
+		connection = dict2obj({
+			'websocket': websocket,
+			'author': '',
+			'guildid': None,
+			'channelid': None,
+		})
+		self.connections.append(connection)
+		self.count_connections[websocket.client.host] += 1
+		try:
+			while True:
+				message = dict2obj(await websocket.receive_json())
+				await self.handle_message(connection, message)
+		except starlette.websockets.WebSocketDisconnect:
+			pass
+		except websockets.exceptions.ConnectionClosedOK:
+			pass
+		if connection.guildid is not None:
+			text = '**' + connection.author + '**: *Disconnected*'
+			await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+		self.connections.remove(connection)
+
+	async def start(self):
+		self.count_connections = collections.defaultdict(lambda: 0)
+		self.connections = []
+		routes = [
+			starlette.routing.Route('/', self.root),
+			starlette.routing.Route('/demo', self.demo),
+			starlette.routing.Route('/status', self.status),
+			starlette.routing.WebSocketRoute('/ws', self.websocket),
+		]
+		app = starlette.applications.Starlette(debug=False, routes=routes)
+		config = uvicorn.Config(app=app, port=8004, host='0.0.0.0')  # if executed through Docker, change the port in the Docker configuration
+		server = uvicorn.Server(config)
+		await server.serve()
 
 """
 https://discordpy.readthedocs.io/en/stable/#manuals
 https://discordpy.readthedocs.io/en/latest/api.html
 """
 
-class MyClient(discord.Client):
+class Discord(discord.Client):
+	async def start(self):
+		await self.login(DISCORD_TOKEN)
+		await self.connect()
+
 	async def on_ready(self):
-		print('Discord Ready', self.user)
-		# await self.user.edit(username='Hermes')  # change username
+		logger.info('Discord: Ready')
 
 	async def on_message(self, message):
-		for connection in state.connections:
+		for connection in gateway.web.connections:
 			if (message.guild.id == connection.guildid) and (message.channel.id == connection.channelid):
 				# only send message from discord-user to a web-user, if the web-user has registered itself to a channel
 				await connection.websocket.send_json({
@@ -197,13 +189,21 @@ class MyClient(discord.Client):
 				})
 
 	async def send_message(self, guildid, channelid, text):
-		guild = discord.utils.get(state.discord.guilds, id=guildid)
+		guild = discord.utils.get(self.guilds, id=guildid)
 		if guild is None:
+			logger.debug('Discord: guild {0} not found'.format(guildid))
 			return
 		channel = discord.utils.get(guild.channels, id=channelid)
 		if type(channel) != discord.channel.TextChannel:
+			logger.debug('Discord: channel {0} not found'.format(channelid))
 			return
 		await channel.send(text)
+
+	def info(self):
+		user = self.user.name
+		return {
+			'user': user,
+		}
 
 class FakeDiscord():
 	"""
@@ -237,9 +237,25 @@ class FakeDiscord():
 
 # Main
 
-loop = asyncio.get_event_loop()
-#loop.create_task(task_timer(loop))
-loop.create_task(task_discord(loop))
-# loop.create_task(task_web(loop))
-loop.run_until_complete(task_web(loop))
-# loop.run_forever()
+class Gateway:
+	def __init__(self):
+		self.time_started = time.time()
+		web = Web()
+		discord = FakeDiscord() if ENABLE_FAKE_DISCORD else Discord()
+		self.web = web
+		self.discord = discord
+
+	def start(self):
+		task_web = self.web.start()
+		task_discord = self.discord.start()
+
+		loop = asyncio.get_event_loop()
+		loop.create_task(task_discord)
+		# Intentionally only wait until starlette is not running anymore, because at the moment only starlette handles Ctrl+C
+		loop.run_until_complete(task_web)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('hermes')
+
+gateway = Gateway()
+gateway.start()

@@ -205,11 +205,35 @@ class MyClient(discord.Client):
 			return
 		await channel.send(text)
 
-async def task_discord(loop):
-	client = MyClient(loop=loop)
-	state.discord = client
-	await client.login(DISCORD_TOKEN)
-	await client.connect()
+class FakeDiscord():
+	"""
+	Acts somewhat like the Discord class, without connecting to a Discord server
+	"""
+	async def start(self):
+		asyncio.create_task(self._task())
+		logger.info('FakeDiscord: Ready')
+
+	async def send_message(self, guildid, channelid, text):
+		await self._send_all(text)
+
+	async def _send_all(self, text):
+		for (i, connection) in enumerate(gateway.web.connections):
+			await connection.websocket.send_json({
+				'type': 'text',
+				'author': 'FakeAuthor',
+				'channel': 'FakeChannel',
+				'text': text,
+			})
+
+	async def _task(self):
+		while True:
+			text = 'Time ' + str(int(time.time()))
+			logger.debug('FakeDiscord: ' + text)
+			await self._send_all(text)
+			await asyncio.sleep(5.0)
+
+	def info(self):
+		return {'user': 'FakeUser'}
 
 # Main
 

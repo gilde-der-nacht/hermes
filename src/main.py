@@ -14,10 +14,6 @@ import uvicorn
 import websockets
 
 """
-
-- TODO get rid of global gateway
-- TODO decouple Web/Discord/Gateway
-
 Ideas:
 
 - Register: Currently author and guildid and channelid, are sent with every
@@ -34,6 +30,8 @@ Ideas:
 - Proper Discord Shutdown: Currently starlette reacts to Ctrl+C and as
   consequence this application is shut down, without properly shutting down
   discord
+- Decoupling: At the moment the classes Gateway, Discord and Web are stroungly
+  coupled. There is much room for improvment here.
 """
 
 config = starlette.config.Config('.env')
@@ -48,6 +46,9 @@ DEMO_DISCORD_CHANNELID = config('DEMO_DISCORD_CHANNELID')
 
 ENABLE_FAKE_DISCORD = config('ENABLE_FAKE_DISCORD', cast=bool, default=False)
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('hermes')
+
 def dict2obj(d): return types.SimpleNamespace(**d)
 
 """
@@ -55,6 +56,9 @@ https://www.starlette.io/
 """
 
 class Web:
+	def __init__(self, gateway):
+		self.gateway = gateway
+
 	def root(self, request):
 		"""
 		$ curl http://127.0.0.1:8004
@@ -79,11 +83,11 @@ class Web:
 		if (username != WEB_STATUS_USERNAME) or (password != WEB_STATUS_PASSWORD):
 			return RESPONSE_UNAUTHORIZED
 
-		runtime_seconds = int(time.time() - gateway.time_started)
+		runtime_seconds = int(time.time() - self.gateway.time_started)
 		return starlette.responses.JSONResponse({
 			'runtime_seconds': runtime_seconds,
 			'web': self.info(),
-			'discord': gateway.discord.info(),
+			'discord': self.gateway.discord.info(),
 		})
 
 	def info(self):
@@ -123,9 +127,9 @@ class Web:
 			if connection.guildid is None:
 				connection.guildid, connection.channelid, connection.author = int(message.guildid), int(message.channelid), message.author
 				text = '**' + connection.author + '**: *Connected*'
-				await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+				await self.gateway.discord.send_message(connection.guildid, connection.channelid, text)
 			text = '**' + message.author + '**: ' + message.text
-			await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+			await self.gateway.discord.send_message(connection.guildid, connection.channelid, text)
 
 	async def websocket(self, websocket):
 		await websocket.accept()
@@ -147,7 +151,7 @@ class Web:
 			pass
 		self.connections.remove(connection)
 		text = '**' + connection.author + '**: *Disconnected*'
-		await gateway.discord.send_message(connection.guildid, connection.channelid, text)
+		await self.gateway.discord.send_message(connection.guildid, connection.channelid, text)
 
 	async def start(self):
 		self.count_connections = collections.defaultdict(lambda: 0)
@@ -169,6 +173,10 @@ https://discordpy.readthedocs.io/en/latest/api.html
 """
 
 class Discord(discord.Client):
+	def __init__(self, gateway):
+		super().__init__()
+		self.gateway = gateway
+
 	async def start(self):
 		await self.login(DISCORD_TOKEN)
 		await self.connect()
@@ -177,7 +185,7 @@ class Discord(discord.Client):
 		logger.info('Discord: Ready')
 
 	async def on_message(self, message):
-		for connection in gateway.web.connections:
+		for connection in self.gateway.web.connections:
 			if (message.guild.id == connection.guildid) and (message.channel.id == connection.channelid):
 				# only send message from discord-user to a web-user, if the web-user has registered itself to a channel
 				await connection.websocket.send_json({
@@ -208,6 +216,10 @@ class FakeDiscord():
 	"""
 	Acts somewhat like the Discord class, without connecting to a Discord server
 	"""
+
+	def __init__(self, gateway):
+		self.gateway = gateway
+
 	async def start(self):
 		asyncio.create_task(self._task())
 		logger.info('FakeDiscord: Ready')
@@ -216,7 +228,7 @@ class FakeDiscord():
 		await self._send_all(text)
 
 	async def _send_all(self, text):
-		for (i, connection) in enumerate(gateway.web.connections):
+		for (i, connection) in enumerate(self.gateway.web.connections):
 			await connection.websocket.send_json({
 				'type': 'text',
 				'author': 'FakeAuthor',
@@ -239,10 +251,8 @@ class FakeDiscord():
 class Gateway:
 	def __init__(self):
 		self.time_started = time.time()
-		web = Web()
-		discord = FakeDiscord() if ENABLE_FAKE_DISCORD else Discord()
-		self.web = web
-		self.discord = discord
+		self.web = Web(self)
+		self.discord = FakeDiscord(self) if ENABLE_FAKE_DISCORD else Discord(self)
 
 	def start(self):
 		task_web = self.web.start()
@@ -253,8 +263,8 @@ class Gateway:
 		# Intentionally only wait until starlette is not running anymore, because at the moment only starlette handles Ctrl+C
 		loop.run_until_complete(task_web)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('hermes')
+def start():
+	gateway = Gateway()
+	gateway.start()
 
-gateway = Gateway()
-gateway.start()
+start()

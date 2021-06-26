@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
+<link rel="icon" href="data:,">
 <title>Py Discord Chat Bot</title>
 <style>
 
@@ -31,91 +32,180 @@ textarea {
 	height: 10em;
 }
 
+#receive {
+	max-height: 10em;
+	overflow-y: auto;
+}
+
+#receive p {
+	margin: 0;
+}
+
+#receive span.channel {
+	color: red;
+}
+
+#receive span.author {
+	color: green;
+}
+
+#receive span.text {
+	color: blue;
+}
+
 </style>
 <script>
 
-function log(...messages) {
-	const nodeTextArea = document.getElementById('log');
-	const datetime = (new Date()).toISOString();
-	nodeTextArea.value += datetime + ' ' + messages.join(' ') + '\n';
-	nodeTextArea.scrollTop = nodeTextArea.scrollHeight;
-}
+class HermesWebSocket {
+	// {url: string, onOpen: callable, onClose: callable, onMessage: callable, onError: callable}
+	constructor(settings) {
+		this.settings = settings;
+		this.ws = null;
+		this.promiseOnOpen = null;
+		this.timeoutMilliseconds = 500;
+		this._open();
+	}
 
-// randomFromTo(2, 4) -> 2, 3, 4
-function randomFromTo(fromInclusive, toInclusive) {
-	return Math.floor(Math.random() * (toInclusive - fromInclusive + 1)) + fromInclusive;
-}
+	_open() {
+		this.ws = new WebSocket(this.settings.url);
+		this.promiseOnOpen = new Promise(resolve => {
+			this.ws.addEventListener('open', event => {
+				this.timeoutMilliseconds = 500;
+				this.settings.onOpen(event);
+				resolve();
+			});
+		});
+		this.ws.addEventListener('close', event => {
+			this.settings.onClose(event);
+			this.timeoutMilliseconds = Math.min(this.timeoutMilliseconds * 1.5, 10000);
+			const milliseconds = (Math.random() * this.timeoutMilliseconds) + this.timeoutMilliseconds;
+			const self = this;
+			window.setTimeout(() => { self._open() }, milliseconds);
+		});
+		this.ws.addEventListener('message', event => {
+			this.settings.onMessage(event)
+		});
+		this.ws.addEventListener('error', event => {
+			this.settings.onError(event);
+		});
+	}
 
-function onOpen() {
-	log('onopen');
-}
+	waitForOpen() {
+		return this.promiseOnOpen;
+	}
 
-function onClose() {
-	log('onclose');
-}
-
-function onMessage(event) {
-	log('onmessage', event.data);
-	const nodeTextArea = document.getElementById('receive');
-	const message = JSON.parse(event.data)
-	if (message.type === 'text') {
-		nodeTextArea.value += message.channel + '> ' + message.author + ': ' + message.text + '\n';
-		nodeTextArea.scrollTop = nodeTextArea.scrollHeight;
+	send(message) {
+		this.ws.send(message);
 	}
 }
 
-function onError(event) {
-	log('onerror', JSON.stringify(event));
-}
-
-function wsCreate(url) {
-	const ws = new WebSocket(url);
-	ws.addEventListener('open', onOpen);
-	ws.addEventListener('close', onClose);
-	ws.addEventListener('message', onMessage);
-	ws.addEventListener('error', onError);
-	return ws;
-}
-
-function wsWaitForOpen(ws) {
-	return new Promise(resolve => ws.addEventListener('open', resolve));
-}
-
-async function main() {
-	document.getElementById('clear').addEventListener('click', (event) => {
-		document.getElementById('receive').value = '';
-		document.getElementById('log').value = '';
-	});
-
-	const nodeAuthor = document.getElementById('author');
-	nodeAuthor.value = 'Mercurius' + randomFromTo(1000, 9999);
-
+async function hermesMain() {
 	// the DEMO_ constants are replaced by their respective environment variable on the server
-	const ws = wsCreate('DEMO_WEBSOCKET_SERVER');
+	const url = 'DEMO_WEBSOCKET_SERVER';
 	const guildid = 'DEMO_DISCORD_GUILDID';
 	const channelid = 'DEMO_DISCORD_CHANNELID';
 
+	const nodeClear = document.getElementById('clear');
+	const nodeLog = document.getElementById('log');
+	const nodeReceive = document.getElementById('receive');
+	const nodeSend = document.getElementById('send');
+	const nodeAuthor = document.getElementById('author');
+
+	function createElement(tagName, ...children) {
+		const node = document.createElement(tagName);
+		for (const child of children) {
+			if (child instanceof HTMLSpanElement) {
+				node.append(child);
+			} else if (typeof child === 'string') {
+				node.append(document.createTextNode(child));
+			} else {
+				for (const key in child) {
+					node.setAttribute(key, child[key]);
+				}
+			}
+		}
+		return node;
+	}
+
+	// randomFromTo(2, 4) -> 2, 3, 4
+	function randomFromTo(fromInclusive, toInclusive) {
+		return Math.floor(Math.random() * (toInclusive - fromInclusive + 1)) + fromInclusive;
+	}
+
+	function randomElement(list) {
+		const index = Math.floor(Math.random() * list.length);
+		return list[index];
+	}
+
+	function log(...messages) {
+		console.debug(...messages);
+		const datetime = (new Date()).toISOString();
+		nodeLog.value += datetime + ' ' + messages.map($ => typeof ($) === 'object' ? JSON.stringify($) : $).join(' ') + '\n';
+		nodeLog.scrollTop = nodeLog.scrollHeight;
+	}
+
+	function onOpen(event) {
+		log('open');
+	}
+
+	function onClose(event) {
+		log('close');
+	}
+
+	function onMessage(event) {
+		const message = JSON.parse(event.data);
+		log('message', message);
+		if (message.type === 'text') {
+			const node = createElement('p',
+				createElement('span', {class: 'channel'}, message.channel), ': ',
+				createElement('span', {class: 'author'}, message.author), '> ',
+				createElement('span', {class: 'text'}, message.text)
+			);
+			nodeReceive.append(node);
+			nodeReceive.scrollTop = nodeReceive.scrollHeight;
+		}
+	}
+
+	function onError(event) {
+		log('error', event);
+	}
+
+	nodeClear.addEventListener('click', (event) => {
+		nodeReceive.innerText = '';
+		nodeLog.value = '';
+	});
+	nodeReceive.innerText = '';
+	nodeLog.value = '';
+
+	// https://greekgodsandgoddesses.net/
+	const names = [
+		'Aphrodite', 'Apollo', 'Ares', 'Athena', 'Cronos', 'Demeter', 'Dionysus', 'Gaea', 'Hades', 'Hephaestus',
+		'Hera', 'Hermes', 'Hestia', 'Iris', 'Nyx', 'Poseidon', 'Prometheus', 'Selene', 'Tyche', 'Zeus'
+	];
+	nodeAuthor.value = randomElement(names) + randomFromTo(10, 99);
+
 	function sendMessage(message) {
+		log('send', message);
 		const send = JSON.stringify(message);
-		log('send', send);
 		ws.send(send);
 	}
 
-	await wsWaitForOpen(ws);
-	sendMessage({type: 'ping'});
+	const ws = new HermesWebSocket({ url: url, onOpen: onOpen, onClose: onClose, onMessage: onMessage, onError: onError });
+	await ws.waitForOpen();
+	sendMessage({ type: 'ping' });
 
-	document.getElementById('send').focus();
-	document.getElementById('send').addEventListener('keypress', (event) => {
+	nodeSend.value = '';
+	nodeSend.focus();
+	nodeSend.addEventListener('keypress', (event) => {
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			nodeInput = document.getElementById('send');
-			sendMessage({type: 'text', channelid: channelid, author: nodeAuthor.value, guildid: guildid, text: nodeInput.value});
-			nodeInput.value = '';
+			sendMessage({ type: 'text', channelid: channelid, author: nodeAuthor.value, guildid: guildid, text: nodeSend.value });
+			nodeSend.value = '';
 		}
 	});
 }
 
-window.addEventListener('load', main);
+window.addEventListener('load', hermesMain);
 
 </script>
 <body>
@@ -125,7 +215,7 @@ window.addEventListener('load', main);
 	<h2>Author</h2>
 	<input id="author" type="text">
 	<h2>Receive</h2>
-	<textarea id="receive" readonly></textarea>
+	<div id="receive"></div>
 	<h2>Send</h2>
 	<input id="send" type="text">
 	<h2>Log</h2>

@@ -199,7 +199,8 @@ async function hermesMain() {
 	nodeSend.addEventListener('keypress', (event) => {
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			sendMessage({ type: 'text', channelid: channelid, author: nodeAuthor.value, guildid: guildid, text: nodeSend.value });
+			const text = '**' + nodeAuthor.value + '**: ' + nodeSend.value;
+			sendMessage({ type: 'text', channelid: channelid, guildid: guildid, author: nodeAuthor.value, text: text });
 			nodeSend.value = '';
 		}
 	});

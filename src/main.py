@@ -13,6 +13,11 @@ import uvicorn
 import websockets
 
 """
+
+TODO:
+
+- Remove Connected/Disconnected messages and let them create by the JS user? author is currently still expected for this two messages.
+
 Ideas:
 
 - Register: Currently author and guildid and channelid, are sent with every
@@ -145,8 +150,7 @@ class Web:
 				connection.guildid, connection.channelid, connection.author = int(message.guildid), int(message.channelid), message.author
 				text = '**' + connection.author + '**: *Connected*'
 				await self.gateway.discord.send_message(connection.guildid, connection.channelid, text)
-			text = '**' + message.author + '**: ' + message.text
-			await self.gateway.discord.send_message(connection.guildid, connection.channelid, text)
+			await self.gateway.discord.send_message(connection.guildid, connection.channelid, message.text)
 
 	async def websocket(self, websocket):
 		await websocket.accept()

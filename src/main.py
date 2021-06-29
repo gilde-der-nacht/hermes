@@ -16,7 +16,30 @@ import websockets
 
 TODO:
 
-- Remove Connected/Disconnected messages and let them create by the JS user? author is currently still expected for this two messages.
+- Remove Connected/Disconnected messages and let them create by the JS user?
+  author is currently still expected for this two messages.
+
+Basic:
+
+- This bot consists of two main classes Web and Discord
+- The Discord class handles the discord-users
+- The Web class handles the web-users
+- Both classes are stongly coupled and use the respective send method of each
+  other E.g. if a web-user writes a message, the Web class calls the send method
+  of the Discord class and vice versa.
+- Just to clarify: The Web class itself does not directly send message from
+  web-users to other web-users.
+
+@startuml
+WebUser1 -> Web: send message
+Web -> Discord: call send_message
+Discord -> Discord: on_message
+Discord -> Web: send message to all web users
+Web -> WebUser1: send message
+WebUser1 -> WebUser1: display sent message
+@enduml
+
+http://www.plantuml.com/plantuml/png/SoWkIImgAStDuGfFJGejJYqoLD2rKm2ohHIAK_DI579JYuiJqrD1iY09bypYvFoY52k5vCIS7B2AU9WAg1IAglmyT6cifYkKv2k0p2i7Mb8AT4Cnp3gOcz0S0nD6LPAIMLoGarW9Kbe2L-e0r0Vq7G00
 
 Ideas:
 

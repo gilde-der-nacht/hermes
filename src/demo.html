@@ -59,26 +59,47 @@ textarea {
 (function () {
 
 class HermesWebSocket {
-	// {url: string, onOpen: callable, onClose: callable, onMessage: callable, onError: callable}
+	// {url: string, onOpen: callable, onClose: callable, onMessage: callable, onError: callable, onReadyStateChange: callable}
 	constructor(settings) {
-		this.settings = settings;
+		function doNothing() { }
+
+		this.settings = {
+			url: settings.url ?? 'ws://127.0.0.1:8004/ws',
+			onOpen: settings.onOpen ?? doNothing,
+			onClose: settings.onClose ?? doNothing,
+			onMessage: settings.onMessage ?? doNothing,
+			onError: settings.onError ?? doNothing,
+			onReadyStateChange: settings.onReadyStateChange ?? doNothing,
+		};
 		this.ws = null;
 		this.promiseOnOpen = null;
 		this.timeoutMilliseconds = 500;
 		this._open();
 	}
 
+	_onReadyStateChange() {
+		const event = new CustomEvent('readystatechange', {
+			detail: {
+				websocket: this.ws,
+			},
+		});
+		this.settings.onReadyStateChange(event);
+	}
+
 	_open() {
 		this.ws = new WebSocket(this.settings.url);
+		this._onReadyStateChange();
 		this.promiseOnOpen = new Promise(resolve => {
 			this.ws.addEventListener('open', event => {
 				this.timeoutMilliseconds = 500;
 				this.settings.onOpen(event);
+				this._onReadyStateChange();
 				resolve();
 			});
 		});
 		this.ws.addEventListener('close', event => {
 			this.settings.onClose(event);
+			this._onReadyStateChange();
 			this.timeoutMilliseconds = Math.min(this.timeoutMilliseconds * 1.5, 10000);
 			const milliseconds = (Math.random() * this.timeoutMilliseconds) + this.timeoutMilliseconds;
 			const self = this;
@@ -147,11 +168,11 @@ async function main() {
 	}
 
 	function onOpen(event) {
-		log('open');
+		log('open', event);
 	}
 
 	function onClose(event) {
-		log('close');
+		log('close', event);
 	}
 
 	function onMessage(event) {
@@ -170,6 +191,11 @@ async function main() {
 
 	function onError(event) {
 		log('error', event);
+	}
+
+	function onReadyStateChange(event) {
+		const namedReadyState = {0: 'CONNECTING', 1: 'OPEN', 2: 'CLOSING', 3: 'CLOSED'};
+		log('readystate', namedReadyState[event.detail.websocket.readyState]);
 	}
 
 	nodeClear.addEventListener('click', (event) => {
@@ -192,7 +218,7 @@ async function main() {
 		ws.send(send);
 	}
 
-	const ws = new HermesWebSocket({ url: url, onOpen: onOpen, onClose: onClose, onMessage: onMessage, onError: onError });
+	const ws = new HermesWebSocket({ url: url, onOpen: onOpen, onClose: onClose, onMessage: onMessage, onError: onError, onReadyStateChange: onReadyStateChange });
 	await ws.waitForOpen();
 	sendMessage({ type: 'ping' });
 

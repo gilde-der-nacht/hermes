@@ -56,6 +56,8 @@ textarea {
 </style>
 <script>
 
+(function () {
+
 class HermesWebSocket {
 	// {url: string, onOpen: callable, onClose: callable, onMessage: callable, onError: callable}
 	constructor(settings) {
@@ -99,7 +101,7 @@ class HermesWebSocket {
 	}
 }
 
-async function hermesMain() {
+async function main() {
 	// the DEMO_ constants are replaced by their respective environment variable on the server
 	const url = 'DEMO_WEBSOCKET_SERVER';
 	const guildid = 'DEMO_DISCORD_GUILDID';
@@ -206,7 +208,9 @@ async function hermesMain() {
 	});
 }
 
-window.addEventListener('load', hermesMain);
+window.addEventListener('load', main);
+
+})();
 
 </script>
 <body>
